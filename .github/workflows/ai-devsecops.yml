@@ -1,4 +1,4 @@
-name: AI DevSecOps Pipeline
+name: 🚦 Automated Code Safety Check
 
 on:
   push:
@@ -9,18 +9,19 @@ on:
       - main
 
 jobs:
-  ai-devsecops:
+  code-safety:
+    name: Check if code is safe
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout full history
-      - name: Checkout repo
+      # 1️⃣ Checkout repository
+      - name: 📥 Checkout source code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # 2️⃣ Detect base branch safely (PR + push)
-      - name: Set base branch
+      # 2️⃣ Detect base branch (PR or push)
+      - name: 🧭 Identify base branch
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             echo "BASE_BRANCH=${{ github.base_ref }}" >> $GITHUB_ENV
@@ -29,32 +30,33 @@ jobs:
           fi
 
       # 3️⃣ Fetch base branch
-      - name: Fetch base branch
+      - name: 🔄 Fetch base branch
         run: git fetch origin $BASE_BRANCH
 
-      # 4️⃣ Get code diff
-      - name: Get code diff
+      # 4️⃣ Detect changed code
+      - name: 🔍 Detect changed code
         run: |
           git diff origin/$BASE_BRANCH > changed_code.txt
-          echo "===== CHANGED CODE ====="
+          echo "Changed code:"
           cat changed_code.txt
 
-      # 5️⃣ Trivy scan (FAIL pipeline on HIGH / CRITICAL)
-      - name: Run Trivy security scan
+      # 5️⃣ Run Trivy security scan (FAIL on HIGH / CRITICAL)
+      - name: 🔐 Scan for security risks
         uses: aquasecurity/trivy-action@0.24.0
         with:
           scan-type: fs
           severity: HIGH,CRITICAL
           exit-code: 1
           ignore-unfixed: true
+          format: table
+          output: trivy-report.txt
 
       # 6️⃣ Run REAL OpenAI Code Review
-      - name: Run AI Code Review (OpenAI)
+      - name: 🤖 AI reviews the changes
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           if [ ! -s changed_code.txt ]; then
-            echo "No code changes to review."
             echo "No changes detected." > ai_review.md
             exit 0
           fi
@@ -86,35 +88,60 @@ EOF
             }")
 
           echo "$RESPONSE" | jq -r '.choices[0].message.content' > ai_review.md
-          echo "===== AI REVIEW ====="
-          cat ai_review.md
 
-      # 7️⃣ Upload AI Review as artifact
-      - name: Upload AI Review
+      # 7️⃣ Generate FINAL TRAFFIC-LIGHT VERDICT
+      - name: 🚦 Final decision: Allow or Block
+        run: |
+          echo "# 🚦 Automated Code Review Result" > final_summary.md
+
+          if grep -q "HIGH\|CRITICAL" trivy-report.txt 2>/dev/null; then
+            STATUS="🔴 BLOCKED"
+            DECISION="❌ Do NOT merge this code"
+          else
+            STATUS="🟢 SAFE – Can Merge"
+            DECISION="✅ Safe to merge"
+          fi
+
+          echo "## Overall Status: $STATUS" >> final_summary.md
+          echo "" >> final_summary.md
+          echo "### 🔐 Security Scan" >> final_summary.md
+          if [ -f trivy-report.txt ]; then
+            echo "- Security issues detected (see report below)" >> final_summary.md
+          else
+            echo "- No critical security issues found" >> final_summary.md
+          fi
+
+          echo "" >> final_summary.md
+          echo "### 🤖 AI Review Summary" >> final_summary.md
+          cat ai_review.md >> final_summary.md
+
+          echo "" >> final_summary.md
+          echo "### ✅ Recommendation" >> final_summary.md
+          echo "$DECISION" >> final_summary.md
+
+      # 8️⃣ Upload human-readable reports
+      - name: 📦 Upload review reports
         uses: actions/upload-artifact@v4
         with:
-          name: ai-code-review
-          path: ai_review.md
+          name: code-review-report
+          path: |
+            final_summary.md
+            ai_review.md
+            changed_code.txt
+            trivy-report.txt
 
-      # 8️⃣ Upload changed code for demo/audit
-      - name: Upload changed code
-        uses: actions/upload-artifact@v4
-        with:
-          name: changed-code
-          path: changed_code.txt
-
-      # 9️⃣ Post AI review as PR comment (WOW factor)
-      - name: Post AI review as PR comment
+      # 9️⃣ Post structured PR comment (NON-TECH FRIENDLY)
+      - name: 💬 Post result on Pull Request
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
-            const review = fs.readFileSync('ai_review.md', 'utf8');
+            const summary = fs.readFileSync('final_summary.md', 'utf8');
 
             await github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `## 🤖 AI Code Review\n\n${review}`
+              body: summary
             });
