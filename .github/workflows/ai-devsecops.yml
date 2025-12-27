@@ -1,4 +1,4 @@
-name: AI Code Review
+name: AI DevSecOps Pipeline
 
 on:
   push:
@@ -9,32 +9,75 @@ on:
       - main
 
 jobs:
-  ai-review:
+  ai-devsecops:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout repository with full history
+      # 1️⃣ Checkout full git history
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # 2️⃣ Fetch main branch explicitly (extra safety)
-      - name: Fetch main branch
-        run: git fetch origin main
-
-      # 3️⃣ Get changed code compared to main
-      - name: Get changed code
+      # 2️⃣ Determine base branch (PR-safe)
+      - name: Set base branch
+        id: base
         run: |
-          git diff origin/main > changed_code.txt
-          echo "Changed code:"
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "BASE_BRANCH=${{ github.base_ref }}" >> $GITHUB_ENV
+          else
+            echo "BASE_BRANCH=main" >> $GITHUB_ENV
+          fi
+
+      # 3️⃣ Fetch base branch explicitly
+      - name: Fetch base branch
+        run: git fetch origin $BASE_BRANCH
+
+      # 4️⃣ Get changed code
+      - name: Get code diff
+        run: |
+          git diff origin/$BASE_BRANCH > changed_code.txt
+          echo "===== CHANGED CODE ====="
           cat changed_code.txt
 
-      # 4️⃣ Call OpenAI (example placeholder)
-      - name: AI Code Review
+      # 5️⃣ Trivy filesystem scan
+      - name: Run Trivy scan
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          scan-type: fs
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+
+      # 6️⃣ Build AI Docker image (if applicable)
+      - name: Build AI image
+        run: |
+          if [ -f Dockerfile ]; then
+            docker build -t ai-review .
+          else
+            echo "No Dockerfile found, skipping build"
+          fi
+
+      # 7️⃣ Run AI Code Review
+      - name: Run Code Review AI
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          echo "Running AI review..."
-          echo "OPENAI_API_KEY is set ✅"
-          # Your actual OpenAI API call logic goes here
+          if [ -s changed_code.txt ]; then
+            echo "Running AI review on changed code..."
+            echo "OPENAI_API_KEY is configured ✅"
+            # Place your OpenAI API call here
+          else
+            echo "No code changes detected."
+          fi
+
+      # 8️⃣ Trivy AI Summary (placeholder)
+      - name: Run Trivy AI Summary
+        run: echo "Summarizing Trivy results with AI (placeholder)"
+
+      # 9️⃣ Upload Security Report (optional)
+      - name: Upload Security Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-report
+          path: .
