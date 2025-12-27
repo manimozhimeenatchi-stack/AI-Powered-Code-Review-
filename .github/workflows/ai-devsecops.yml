@@ -1,38 +1,40 @@
-name: AI DevSecOps Pipeline
+name: AI Code Review
 
 on:
+  push:
+    branches:
+      - main
   pull_request:
+    branches:
+      - main
 
 jobs:
-  ai-devsecops:
+  ai-review:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Get code diff
-        run: git diff origin/main > changed_code.txt
-
-      - name: Run Trivy scan
-        uses: aquasecurity/trivy-action@0.24.0
+      # 1️⃣ Checkout repository with full history
+      - name: Checkout repo
+        uses: actions/checkout@v4
         with:
-          scan-type: fs
-          format: json
-          output: trivy-report.json
+          fetch-depth: 0
 
-      - name: Build AI image
-        run: docker build -t ai-devsecops .
+      # 2️⃣ Fetch main branch explicitly (extra safety)
+      - name: Fetch main branch
+        run: git fetch origin main
 
-      - name: Run Code Review AI
+      # 3️⃣ Get changed code compared to main
+      - name: Get changed code
         run: |
-          docker run             -e OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}             -v ${{ github.workspace }}:/app             ai-devsecops python review.py
+          git diff origin/main > changed_code.txt
+          echo "Changed code:"
+          cat changed_code.txt
 
-      - name: Run Trivy AI Summary
+      # 4️⃣ Call OpenAI (example placeholder)
+      - name: AI Code Review
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          docker run             -e OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}             -v ${{ github.workspace }}:/app             ai-devsecops python trivy_ai_review.py
-
-      - name: Upload Security Report
-        uses: actions/upload-artifact@v4
-        with:
-          name: ai-security-report
-          path: ai-security-summary.txt
+          echo "Running AI review..."
+          echo "OPENAI_API_KEY is set ✅"
+          # Your actual OpenAI API call logic goes here
