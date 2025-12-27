@@ -12,13 +12,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout
+      # 1️⃣ Checkout repository
       - name: 📥 Checkout source code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # 2️⃣ Base branch detection
+      # 2️⃣ Identify base branch
       - name: 🧭 Identify base branch
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
@@ -35,9 +35,9 @@ jobs:
       - name: 🔍 Detect changed code
         run: |
           git diff origin/$BASE_BRANCH > changed_code.txt
-          echo "Diff collected"
+          echo "Changed code collected"
 
-      # 5️⃣ Trivy security scan (fail on HIGH/CRITICAL)
+      # 5️⃣ Trivy security scan (FAIL on HIGH / CRITICAL)
       - name: 🔐 Scan for security risks
         uses: aquasecurity/trivy-action@0.24.0
         with:
@@ -48,7 +48,7 @@ jobs:
           format: table
           output: trivy-report.txt
 
-      # 6️⃣ AI Code Review (YAML-SAFE)
+      # 6️⃣ AI Code Review (100% YAML-SAFE)
       - name: 🤖 AI reviews the changes
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -58,25 +58,32 @@ jobs:
             exit 0
           fi
 
-          PROMPT="You are a senior DevSecOps engineer.\n\nReview the following Git diff and provide:\n- Security issues\n- Code quality issues\n- Best practice improvements\n- Overall risk level (Low / Medium / High)\n\nRespond in clean Markdown.\n\nGit diff:\n"
+          printf "You are a senior DevSecOps engineer.\n\n" > prompt.txt
+          printf "Review the following Git diff and provide:\n" >> prompt.txt
+          printf "- Security issues\n" >> prompt.txt
+          printf "- Code quality issues\n" >> prompt.txt
+          printf "- Best practice improvements\n" >> prompt.txt
+          printf "- Overall risk level (Low / Medium / High)\n\n" >> prompt.txt
+          printf "Respond in clean Markdown.\n\n" >> prompt.txt
+          printf "Git diff:\n" >> prompt.txt
+          cat changed_code.txt >> prompt.txt
 
           RESPONSE=$(curl -s https://api.openai.com/v1/chat/completions \
             -H "Authorization: Bearer $OPENAI_API_KEY" \
             -H "Content-Type: application/json" \
             -d "$(jq -n \
-              --arg prompt "$PROMPT" \
-              --arg diff "$(cat changed_code.txt)" \
+              --arg content "$(cat prompt.txt)" \
               '{
                 model: "gpt-4o-mini",
                 messages: [
                   { "role": "system", "content": "You are a DevSecOps code reviewer" },
-                  { "role": "user", "content": ($prompt + $diff) }
+                  { "role": "user", "content": $content }
                 ]
               }')")
 
           echo "$RESPONSE" | jq -r '.choices[0].message.content' > ai_review.md
 
-      # 7️⃣ Final verdict (ALWAYS RUNS)
+      # 7️⃣ Generate FINAL SUMMARY (ALWAYS RUNS)
       - name: 🚦 Final decision: Allow or Block
         if: always()
         run: |
@@ -92,11 +99,22 @@ jobs:
 
           echo "## Overall Status: $STATUS" >> final_summary.md
           echo "" >> final_summary.md
+
           echo "### 🔐 Security Scan" >> final_summary.md
-          [ -f trivy-report.txt ] && echo "- Security scan completed" >> final_summary.md || echo "- Security scan unavailable" >> final_summary.md
+          if [ -f trivy-report.txt ]; then
+            echo "- Security scan completed (see report)" >> final_summary.md
+          else
+            echo "- Security scan unavailable" >> final_summary.md
+          fi
+
           echo "" >> final_summary.md
           echo "### 🤖 AI Review Summary" >> final_summary.md
-          [ -f ai_review.md ] && cat ai_review.md >> final_summary.md || echo "- AI review unavailable" >> final_summary.md
+          if [ -f ai_review.md ]; then
+            cat ai_review.md >> final_summary.md
+          else
+            echo "- AI review unavailable" >> final_summary.md
+          fi
+
           echo "" >> final_summary.md
           echo "### ✅ Recommendation" >> final_summary.md
           echo "$DECISION" >> final_summary.md
@@ -113,7 +131,7 @@ jobs:
             changed_code.txt
             trivy-report.txt
 
-      # 9️⃣ PR comment
+      # 9️⃣ Post result as PR comment
       - name: 💬 Post result on Pull Request
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
