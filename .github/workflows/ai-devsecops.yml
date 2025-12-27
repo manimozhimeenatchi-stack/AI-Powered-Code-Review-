@@ -20,7 +20,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      # 2️⃣ Detect base branch (PR or push)
+      # 2️⃣ Identify base branch
       - name: 🧭 Identify base branch
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
@@ -37,10 +37,9 @@ jobs:
       - name: 🔍 Detect changed code
         run: |
           git diff origin/$BASE_BRANCH > changed_code.txt
-          echo "Changed code:"
-          cat changed_code.txt
+          echo "Changed code detected."
 
-      # 5️⃣ Run Trivy security scan (FAIL on HIGH / CRITICAL)
+      # 5️⃣ Run Trivy scan (FAIL on HIGH / CRITICAL)
       - name: 🔐 Scan for security risks
         uses: aquasecurity/trivy-action@0.24.0
         with:
@@ -51,13 +50,13 @@ jobs:
           format: table
           output: trivy-report.txt
 
-      # 6️⃣ Run REAL OpenAI Code Review
+      # 6️⃣ Run AI code review (real OpenAI call)
       - name: 🤖 AI reviews the changes
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           if [ ! -s changed_code.txt ]; then
-            echo "No changes detected." > ai_review.md
+            echo "No code changes detected." > ai_review.md
             exit 0
           fi
 
@@ -89,12 +88,13 @@ EOF
 
           echo "$RESPONSE" | jq -r '.choices[0].message.content' > ai_review.md
 
-      # 7️⃣ Generate FINAL TRAFFIC-LIGHT VERDICT
+      # 7️⃣ Generate FINAL SUMMARY (ALWAYS RUNS)
       - name: 🚦 Final decision: Allow or Block
+        if: always()
         run: |
           echo "# 🚦 Automated Code Review Result" > final_summary.md
 
-          if grep -q "HIGH\|CRITICAL" trivy-report.txt 2>/dev/null; then
+          if [ "${{ job.status }}" = "failure" ]; then
             STATUS="🔴 BLOCKED"
             DECISION="❌ Do NOT merge this code"
           else
@@ -104,33 +104,39 @@ EOF
 
           echo "## Overall Status: $STATUS" >> final_summary.md
           echo "" >> final_summary.md
+
           echo "### 🔐 Security Scan" >> final_summary.md
           if [ -f trivy-report.txt ]; then
-            echo "- Security issues detected (see report below)" >> final_summary.md
+            echo "- Security scan completed (see report below)" >> final_summary.md
           else
-            echo "- No critical security issues found" >> final_summary.md
+            echo "- Security scan not available" >> final_summary.md
           fi
 
           echo "" >> final_summary.md
           echo "### 🤖 AI Review Summary" >> final_summary.md
-          cat ai_review.md >> final_summary.md
+          if [ -f ai_review.md ]; then
+            cat ai_review.md >> final_summary.md
+          else
+            echo "- AI review not generated" >> final_summary.md
+          fi
 
           echo "" >> final_summary.md
           echo "### ✅ Recommendation" >> final_summary.md
           echo "$DECISION" >> final_summary.md
 
-      # 8️⃣ Upload human-readable reports
-      - name: 📦 Upload review reports
+      # 8️⃣ Upload artifacts (ALWAYS)
+      - name: 📦 Upload security report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: code-review-report
+          name: security-report
           path: |
             final_summary.md
             ai_review.md
             changed_code.txt
             trivy-report.txt
 
-      # 9️⃣ Post structured PR comment (NON-TECH FRIENDLY)
+      # 9️⃣ Post result as PR comment
       - name: 💬 Post result on Pull Request
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
