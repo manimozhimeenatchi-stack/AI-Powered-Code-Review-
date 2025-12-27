@@ -2,17 +2,19 @@ name: Automated Code Safety Check
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
   pull_request:
-    branches: [ main ]
+    branches:
+      - main
 
 jobs:
   code-safety:
-    name: Check if code is safe
     runs-on: ubuntu-latest
+    name: Check if code is safe
 
     steps:
-      # 1️⃣ Checkout
+      # 1️⃣ Checkout code
       - name: Checkout source code
         uses: actions/checkout@v4
         with:
@@ -31,12 +33,12 @@ jobs:
       - name: Fetch base branch
         run: git fetch origin $BASE_BRANCH
 
-      # 4️⃣ Detect changed code
+      # 4️⃣ Get changed code
       - name: Detect changed code
         run: |
           git diff origin/$BASE_BRANCH > changed_code.txt
 
-      # 5️⃣ Trivy scan (fail on HIGH / CRITICAL)
+      # 5️⃣ Trivy scan (fails on HIGH / CRITICAL)
       - name: Scan for security risks
         uses: aquasecurity/trivy-action@0.24.0
         with:
@@ -89,23 +91,14 @@ jobs:
           echo "# Automated Code Review Result" > final_summary.md
 
           if [ "${{ job.status }}" = "failure" ]; then
-            STATUS="BLOCKED"
-            DECISION="DO NOT merge this code"
+            STATUS="🔴 BLOCKED"
+            DECISION="❌ DO NOT merge this code"
           else
-            STATUS="SAFE – Can Merge"
-            DECISION="Safe to merge"
+            STATUS="🟢 SAFE – Can Merge"
+            DECISION="✅ Safe to merge"
           fi
 
           echo "## Overall Status: $STATUS" >> final_summary.md
-          echo "" >> final_summary.md
-
-          echo "### Security Scan" >> final_summary.md
-          [ -f trivy-report.txt ] && echo "- Scan completed" >> final_summary.md || echo "- Scan unavailable" >> final_summary.md
-
-          echo "" >> final_summary.md
-          echo "### AI Review Summary" >> final_summary.md
-          [ -f ai_review.md ] && cat ai_review.md >> final_summary.md || echo "- AI review unavailable" >> final_summary.md
-
           echo "" >> final_summary.md
           echo "### Recommendation" >> final_summary.md
           echo "$DECISION" >> final_summary.md
@@ -122,7 +115,7 @@ jobs:
             changed_code.txt
             trivy-report.txt
 
-      # 9️⃣ PR comment
+      # 9️⃣ Post result on PR
       - name: Post result on Pull Request
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
