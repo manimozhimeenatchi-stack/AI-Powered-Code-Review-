@@ -1,4 +1,4 @@
-name: 🚦 Automated Code Safety Check
+name: Automated Code Safety Check
 
 on:
   push:
@@ -12,14 +12,14 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout repository
-      - name: 📥 Checkout source code
+      # 1️⃣ Checkout
+      - name: Checkout source code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       # 2️⃣ Identify base branch
-      - name: 🧭 Identify base branch
+      - name: Identify base branch
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             echo "BASE_BRANCH=${{ github.base_ref }}" >> $GITHUB_ENV
@@ -28,17 +28,16 @@ jobs:
           fi
 
       # 3️⃣ Fetch base branch
-      - name: 🔄 Fetch base branch
+      - name: Fetch base branch
         run: git fetch origin $BASE_BRANCH
 
       # 4️⃣ Detect changed code
-      - name: 🔍 Detect changed code
+      - name: Detect changed code
         run: |
           git diff origin/$BASE_BRANCH > changed_code.txt
-          echo "Changed code collected"
 
-      # 5️⃣ Trivy security scan (FAIL on HIGH / CRITICAL)
-      - name: 🔐 Scan for security risks
+      # 5️⃣ Trivy scan (fail on HIGH / CRITICAL)
+      - name: Scan for security risks
         uses: aquasecurity/trivy-action@0.24.0
         with:
           scan-type: fs
@@ -48,8 +47,8 @@ jobs:
           format: table
           output: trivy-report.txt
 
-      # 6️⃣ AI Code Review (100% YAML-SAFE)
-      - name: 🤖 AI reviews the changes
+      # 6️⃣ AI Code Review (YAML-SAFE)
+      - name: AI reviews the changes
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
@@ -83,44 +82,36 @@ jobs:
 
           echo "$RESPONSE" | jq -r '.choices[0].message.content' > ai_review.md
 
-      # 7️⃣ Generate FINAL SUMMARY (ALWAYS RUNS)
-      - name: 🚦 Final decision: Allow or Block
+      # 7️⃣ FINAL SUMMARY (ALWAYS RUNS)
+      - name: Final decision: Allow or Block
         if: always()
         run: |
-          echo "# 🚦 Automated Code Review Result" > final_summary.md
+          echo "# Automated Code Review Result" > final_summary.md
 
           if [ "${{ job.status }}" = "failure" ]; then
-            STATUS="🔴 BLOCKED"
-            DECISION="❌ Do NOT merge this code"
+            STATUS="BLOCKED"
+            DECISION="DO NOT merge this code"
           else
-            STATUS="🟢 SAFE – Can Merge"
-            DECISION="✅ Safe to merge"
+            STATUS="SAFE – Can Merge"
+            DECISION="Safe to merge"
           fi
 
           echo "## Overall Status: $STATUS" >> final_summary.md
           echo "" >> final_summary.md
 
-          echo "### 🔐 Security Scan" >> final_summary.md
-          if [ -f trivy-report.txt ]; then
-            echo "- Security scan completed (see report)" >> final_summary.md
-          else
-            echo "- Security scan unavailable" >> final_summary.md
-          fi
+          echo "### Security Scan" >> final_summary.md
+          [ -f trivy-report.txt ] && echo "- Scan completed" >> final_summary.md || echo "- Scan unavailable" >> final_summary.md
 
           echo "" >> final_summary.md
-          echo "### 🤖 AI Review Summary" >> final_summary.md
-          if [ -f ai_review.md ]; then
-            cat ai_review.md >> final_summary.md
-          else
-            echo "- AI review unavailable" >> final_summary.md
-          fi
+          echo "### AI Review Summary" >> final_summary.md
+          [ -f ai_review.md ] && cat ai_review.md >> final_summary.md || echo "- AI review unavailable" >> final_summary.md
 
           echo "" >> final_summary.md
-          echo "### ✅ Recommendation" >> final_summary.md
+          echo "### Recommendation" >> final_summary.md
           echo "$DECISION" >> final_summary.md
 
       # 8️⃣ Upload artifacts (ALWAYS)
-      - name: 📦 Upload security report
+      - name: Upload security report
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -131,8 +122,8 @@ jobs:
             changed_code.txt
             trivy-report.txt
 
-      # 9️⃣ Post result as PR comment
-      - name: 💬 Post result on Pull Request
+      # 9️⃣ PR comment
+      - name: Post result on Pull Request
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
         with:
