@@ -1,2 +1,4 @@
 openai
 requests
+django==1.2
+
