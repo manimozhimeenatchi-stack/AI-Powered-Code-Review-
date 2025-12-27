@@ -37,7 +37,7 @@ jobs:
       - name: 🔍 Detect changed code
         run: |
           git diff origin/$BASE_BRANCH > changed_code.txt
-          echo "Changed code detected."
+          echo "Changed code detected"
 
       # 5️⃣ Run Trivy scan (FAIL on HIGH / CRITICAL)
       - name: 🔐 Scan for security risks
@@ -50,7 +50,7 @@ jobs:
           format: table
           output: trivy-report.txt
 
-      # 6️⃣ Run AI code review (real OpenAI call)
+      # 6️⃣ Run AI code review (YAML-safe, REAL OpenAI call)
       - name: 🤖 AI reviews the changes
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -60,8 +60,7 @@ jobs:
             exit 0
           fi
 
-          PROMPT=$(cat <<'EOF'
-You are a senior DevSecOps engineer.
+          PROMPT="You are a senior DevSecOps engineer.
 
 Review the following Git diff and provide:
 - 🔐 Security issues
@@ -72,19 +71,21 @@ Review the following Git diff and provide:
 Respond in clean Markdown.
 
 Git diff:
-EOF
-)
+"
 
           RESPONSE=$(curl -s https://api.openai.com/v1/chat/completions \
             -H "Authorization: Bearer $OPENAI_API_KEY" \
             -H "Content-Type: application/json" \
-            -d "{
-              \"model\": \"gpt-4o-mini\",
-              \"messages\": [
-                {\"role\": \"system\", \"content\": \"You are a DevSecOps code reviewer\"},
-                {\"role\": \"user\", \"content\": \"${PROMPT}\n$(cat changed_code.txt)\"}
-              ]
-            }")
+            -d "$(jq -n \
+              --arg prompt "$PROMPT" \
+              --arg diff "$(cat changed_code.txt)" \
+              '{
+                model: "gpt-4o-mini",
+                messages: [
+                  { role: "system", content: "You are a DevSecOps code reviewer" },
+                  { role: "user", content: ($prompt + "\n" + $diff) }
+                ]
+              }')")
 
           echo "$RESPONSE" | jq -r '.choices[0].message.content' > ai_review.md
 
@@ -107,7 +108,7 @@ EOF
 
           echo "### 🔐 Security Scan" >> final_summary.md
           if [ -f trivy-report.txt ]; then
-            echo "- Security scan completed (see report below)" >> final_summary.md
+            echo "- Security scan completed (see report)" >> final_summary.md
           else
             echo "- Security scan not available" >> final_summary.md
           fi
