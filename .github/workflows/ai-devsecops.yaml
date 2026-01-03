@@ -80,7 +80,7 @@ jobs:
 
           echo "$RESPONSE" | jq -r '.choices[0].message.content' > ai_review.md
 
-      - name: Final decision: Allow or Block
+      - name: Final decision Allow or Block
         if: always()
         run: |
           echo "# Automated Code Review Result" > final_summary.md
