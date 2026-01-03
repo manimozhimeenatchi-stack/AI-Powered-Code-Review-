@@ -45,7 +45,7 @@ jobs:
           format: table
           output: trivy-report.txt
 
-            - name: AI reviews the changes
+      - name: AI reviews the changes
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
