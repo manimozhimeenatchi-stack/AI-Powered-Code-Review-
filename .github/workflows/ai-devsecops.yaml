@@ -45,7 +45,7 @@ jobs:
           format: table
           output: trivy-report.txt
 
-      - name: AI reviews the changes
+            - name: AI reviews the changes
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
@@ -54,14 +54,16 @@ jobs:
             exit 0
           fi
 
-          printf "You are a senior DevSecOps engineer.\n\n" > prompt.txt
-          printf "Review the following Git diff and provide:\n" >> prompt.txt
-          printf "- Security issues\n" >> prompt.txt
-          printf "- Code quality issues\n" >> prompt.txt
-          printf "- Best practice improvements\n" >> prompt.txt
-          printf "- Overall risk level: Low, Medium, or High\n\n" >> prompt.txt
-          printf "Respond in clean Markdown.\n\n" >> prompt.txt
-          printf "Git diff:\n" >> prompt.txt
+          printf "%s\n\n" "You are a senior DevSecOps engineer." > prompt.txt
+          printf "%s\n" "Review the following Git diff and provide:" >> prompt.txt
+
+          printf -- "%s\n" "- Security issues" >> prompt.txt
+          printf -- "%s\n" "- Code quality issues" >> prompt.txt
+          printf -- "%s\n" "- Best practice improvements" >> prompt.txt
+          printf -- "%s\n\n" "- Overall risk level: Low, Medium, or High" >> prompt.txt
+
+          printf "%s\n\n" "Respond in clean Markdown." >> prompt.txt
+          printf "%s\n" "Git diff:" >> prompt.txt
 
           cat changed_code.txt >> prompt.txt
 
@@ -79,6 +81,7 @@ jobs:
               }')")
 
           echo "$RESPONSE" | jq -r '.choices[0].message.content' > ai_review.md
+
 
       - name: Final decision Allow or Block
         if: always()
@@ -124,5 +127,6 @@ jobs:
               issue_number: context.issue.number,
               body: summary
             });
+
 
 
