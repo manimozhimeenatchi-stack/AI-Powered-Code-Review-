@@ -86,7 +86,7 @@ jobs:
 
           echo "$RESPONSE" | jq -r '.choices[0].message.content' > ai_review.md
 
-      # 7️⃣ Final summary (ALWAYS runs)
+      # 7️⃣ Final summary (ALWAY runs)
       - name: Final decision: Allow or Block
         if: always()
         run: |
