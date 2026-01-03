@@ -10,8 +10,8 @@ on:
 
 jobs:
   code-safety:
-    runs-on: ubuntu-latest
     name: Check if code is safe
+    runs-on: ubuntu-latest
 
     steps:
       # 1️⃣ Checkout code
@@ -24,19 +24,20 @@ jobs:
       - name: Identify base branch
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "BASE_BRANCH=${{ github.base_ref }}" >> $GITHUB_ENV
+            echo "BASE_BRANCH=${{ github.base_ref }}" >> "$GITHUB_ENV"
           else
-            echo "BASE_BRANCH=main" >> $GITHUB_ENV
+            echo "BASE_BRANCH=main" >> "$GITHUB_ENV"
           fi
 
       # 3️⃣ Fetch base branch
       - name: Fetch base branch
-        run: git fetch origin $BASE_BRANCH
+        run: |
+          git fetch origin "$BASE_BRANCH"
 
       # 4️⃣ Get changed code
       - name: Detect changed code
         run: |
-          git diff origin/$BASE_BRANCH > changed_code.txt
+          git diff origin/"$BASE_BRANCH" > changed_code.txt
 
       # 5️⃣ Trivy scan (fails on HIGH / CRITICAL)
       - name: Scan for security risks
@@ -49,7 +50,7 @@ jobs:
           format: table
           output: trivy-report.txt
 
-      # 6️⃣ AI Code Review (YAML-SAFE)
+      # 6️⃣ AI Code Review
       - name: AI reviews the changes
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -59,14 +60,20 @@ jobs:
             exit 0
           fi
 
-          printf "You are a senior DevSecOps engineer.\n\n" > prompt.txt
-          printf "Review the following Git diff and provide:\n" >> prompt.txt
-          printf "- Security issues\n" >> prompt.txt
-          printf "- Code quality issues\n" >> prompt.txt
-          printf "- Best practice improvements\n" >> prompt.txt
-          printf "- Overall risk level (Low / Medium / High)\n\n" >> prompt.txt
-          printf "Respond in clean Markdown.\n\n" >> prompt.txt
-          printf "Git diff:\n" >> prompt.txt
+          cat <<EOF > prompt.txt
+You are a senior DevSecOps engineer.
+
+Review the following Git diff and provide:
+- Security issues
+- Code quality issues
+- Best practice improvements
+- Overall risk level (Low / Medium / High)
+
+Respond in clean Markdown.
+
+Git diff:
+EOF
+
           cat changed_code.txt >> prompt.txt
 
           RESPONSE=$(curl -s https://api.openai.com/v1/chat/completions \
@@ -88,7 +95,7 @@ jobs:
       - name: Final decision: Allow or Block
         if: always()
         run: |
-          echo "# Automated Code Review Result" > final_summary.md
+          echo "# 🚦 Automated Code Review Result" > final_summary.md
 
           if [ "${{ job.status }}" = "failure" ]; then
             STATUS="🔴 BLOCKED"
@@ -122,11 +129,12 @@ jobs:
         with:
           script: |
             const fs = require('fs');
+
             const summary = fs.readFileSync('final_summary.md', 'utf8');
 
             await github.rest.issues.createComment({
-              issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
+              issue_number: context.issue.number,
               body: summary
             });
