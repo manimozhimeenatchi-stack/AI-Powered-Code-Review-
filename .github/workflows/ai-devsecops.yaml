@@ -14,13 +14,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout code
       - name: Checkout source code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # 2️⃣ Identify base branch
       - name: Identify base branch
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
@@ -29,17 +27,14 @@ jobs:
             echo "BASE_BRANCH=main" >> "$GITHUB_ENV"
           fi
 
-      # 3️⃣ Fetch base branch
       - name: Fetch base branch
         run: |
           git fetch origin "$BASE_BRANCH"
 
-      # 4️⃣ Detect changed code
       - name: Detect changed code
         run: |
           git diff origin/"$BASE_BRANCH" > changed_code.txt
 
-      # 5️⃣ Trivy security scan (HIGH / CRITICAL only)
       - name: Scan for security risks
         uses: aquasecurity/trivy-action@0.24.0
         with:
@@ -50,7 +45,6 @@ jobs:
           format: table
           output: trivy-report.txt
 
-      # 6️⃣ AI Code Review (YAML-safe)
       - name: AI reviews the changes
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -65,7 +59,7 @@ jobs:
           printf "- Security issues\n" >> prompt.txt
           printf "- Code quality issues\n" >> prompt.txt
           printf "- Best practice improvements\n" >> prompt.txt
-          printf -- "- Overall risk level: Low, Medium, or High\n\n" >> prompt.txt
+          printf "- Overall risk level: Low, Medium, or High\n\n" >> prompt.txt
           printf "Respond in clean Markdown.\n\n" >> prompt.txt
           printf "Git diff:\n" >> prompt.txt
 
@@ -86,26 +80,24 @@ jobs:
 
           echo "$RESPONSE" | jq -r '.choices[0].message.content' > ai_review.md
 
-      # 7️⃣ Final summary (ALWAY runs)
       - name: Final decision: Allow or Block
         if: always()
         run: |
-          echo "# 🚦 Automated Code Review Result" > final_summary.md
+          echo "# Automated Code Review Result" > final_summary.md
 
           if [ "${{ job.status }}" = "failure" ]; then
-            STATUS="🔴 BLOCKED"
-            DECISION="❌ DO NOT merge this code"
+            STATUS="BLOCKED"
+            DECISION="DO NOT merge this code"
           else
-            STATUS="🟢 SAFE – Can Merge"
-            DECISION="✅ Safe to merge"
+            STATUS="SAFE - Can Merge"
+            DECISION="Safe to merge"
           fi
 
-          echo "## Overall Status: $STATUS" >> final_summary.md
+          echo "Overall Status: $STATUS" >> final_summary.md
           echo "" >> final_summary.md
-          echo "### Recommendation" >> final_summary.md
+          echo "Recommendation:" >> final_summary.md
           echo "$DECISION" >> final_summary.md
 
-      # 8️⃣ Upload artifacts (ALWAYS)
       - name: Upload security artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -117,7 +109,6 @@ jobs:
             changed_code.txt
             trivy-report.txt
 
-      # 9️⃣ Post result on Pull Request
       - name: Post result on Pull Request
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
@@ -133,4 +124,3 @@ jobs:
               issue_number: context.issue.number,
               body: summary
             });
-
