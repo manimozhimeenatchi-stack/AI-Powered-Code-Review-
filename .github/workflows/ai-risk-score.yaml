@@ -1,0 +1,48 @@
+name: AI Risk Scoring
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  ai-risk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run AI Risk Analysis
+        id: ai
+        run: |
+          # Simulated AI output (replace with real OpenAI call later)
+          SECURITY_SCORE=8
+          MAINTAINABILITY_SCORE=6
+          PERFORMANCE_SCORE=5
+
+          TOTAL_SCORE=$((SECURITY_SCORE + MAINTAINABILITY_SCORE + PERFORMANCE_SCORE))
+
+          echo "total_score=$TOTAL_SCORE" >> $GITHUB_OUTPUT
+
+          cat <<EOF > ai_risk_report.json
+          {
+            "security": $SECURITY_SCORE,
+            "maintainability": $MAINTAINABILITY_SCORE,
+            "performance": $PERFORMANCE_SCORE,
+            "total": $TOTAL_SCORE
+          }
+          EOF
+
+      - name: Fail if AI Risk Score is High
+        run: |
+          if [ "${{ steps.ai.outputs.total_score }}" -ge 15 ]; then
+            echo "❌ AI Risk too high"
+            exit 1
+          fi
+
+      - name: Upload AI Risk Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-risk-report
+          path: ai_risk_report.json
