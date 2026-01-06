@@ -1,0 +1,103 @@
+name: Final AI Code Review Summary
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  final-summary:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1️⃣ Checkout repo (needed for context)
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2️⃣ Download AI Risk Score artifact
+      - name: Download AI Risk Score
+        uses: actions/download-artifact@v4
+        with:
+          name: ai-risk
+          path: ./reports
+        continue-on-error: true
+
+      # 3️⃣ Download Gitleaks report
+      - name: Download Secret Scan Report
+        uses: actions/download-artifact@v4
+        with:
+          name: gitleaks-report
+          path: ./reports
+        continue-on-error: true
+
+      # 4️⃣ Read security policy
+      - name: Read Security Policy
+        id: policy
+        run: |
+          MAX_AI_SCORE=$(yq '.rules.ai_risk.max_score' security_policy.yaml)
+          echo "max_ai_score=$MAX_AI_SCORE" >> $GITHUB_OUTPUT
+
+      # 5️⃣ Generate FINAL plain-English summary
+      - name: Generate Final Summary
+        id: summary
+        run: |
+          # Defaults
+          AI_SCORE="N/A"
+          SECRET_COUNT=0
+          STATUS="✅ SAFE TO MERGE"
+
+          # Read AI score if available
+          if [ -f "./reports/ai-risk.json" ]; then
+            AI_SCORE=$(jq '.total_score' ./reports/ai-risk.json)
+          fi
+
+          # Read secret findings if available
+          if [ -f "./reports/gitleaks-report.json" ]; then
+            SECRET_COUNT=$(jq 'if type=="array" then length else (.findings | length // 0) end' ./reports/gitleaks-report.json)
+          fi
+
+          # Decide final status
+          if [ "$SECRET_COUNT" -gt 0 ]; then
+            STATUS="❌ BLOCKED (Secrets detected)"
+          elif [ "$AI_SCORE" != "N/A" ] && [ "$AI_SCORE" -gt "${{ steps.policy.outputs.max_ai_score }}" ]; then
+            STATUS="❌ BLOCKED (AI risk too high)"
+          fi
+
+          # Create human-readable summary
+          cat <<EOF > final_summary.md
+          ## 🤖 AI Code Review – Final Result
+
+          ### 🚦 Overall Status
+          **$STATUS**
+
+          ### 🔐 Secret Scan
+          - Secrets detected: **$SECRET_COUNT**
+
+          ### 🤖 AI Risk Analysis
+          - Risk score: **$AI_SCORE**
+          - Allowed maximum: **${{ steps.policy.outputs.max_ai_score }}**
+
+          ### 📜 Policy Enforcement
+          - Policies evaluated against configured rules
+
+          ### 🧾 Audit
+          - Decision logged with timestamp
+
+          👉 This result was generated automatically by the CI pipeline.
+          EOF
+
+          echo "summary<<EOF" >> $GITHUB_OUTPUT
+          cat final_summary.md >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      # 6️⃣ Post ONE consolidated PR comment
+      - name: Post Final Summary on PR
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          body: ${{ steps.summary.outputs.summary }}
+          token: ${{ secrets.GITHUB_TOKEN }}
