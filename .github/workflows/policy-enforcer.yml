@@ -1,27 +1,20 @@
-name: Policy Enforcement
+- name: Download AI risk artifact
+  uses: actions/download-artifact@v4
+  with:
+    name: ai-risk
+    path: .
 
-on:
-  pull_request:
-    branches: [main]
+- name: Enforce AI risk policy
+  run: |
+    MAX_SCORE=$(yq '.rules.ai_risk.max_score' security_policy.yaml)
+    AI_SCORE=$(jq '.total_score' ai-risk.json)
 
-jobs:
-  policy-check:
-    runs-on: ubuntu-latest
+    echo "AI Score: $AI_SCORE"
+    echo "Max Allowed: $MAX_SCORE"
 
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-
-      - name: Read policy file
-        id: policy
-        run: |
-          MAX_AI_SCORE=$(yq '.rules.ai_risk.max_score' security_policy.yaml)
-          echo "max_ai_score=$MAX_AI_SCORE" >> $GITHUB_OUTPUT
-
-      - name: Enforce AI Policy
-        run: |
-          AI_SCORE=15  # Replace with actual score
-          if [ "$AI_SCORE" -gt "${{ steps.policy.outputs.max_ai_score }}" ]; then
-            echo "❌ Policy violation: AI risk too high"
-            exit 1
-          fi
+    if [ "$AI_SCORE" -gt "$MAX_SCORE" ]; then
+      echo "❌ Policy violation: AI risk too high"
+      exit 1
+    else
+      echo "✅ AI risk within allowed limits"
+    fi
