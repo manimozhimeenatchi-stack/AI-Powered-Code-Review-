@@ -16,9 +16,9 @@ jobs:
         id: ai
         run: |
           # Simulated AI output (replace with real OpenAI call later)
-          SECURITY_SCORE=8
-          MAINTAINABILITY_SCORE=6
-          PERFORMANCE_SCORE=5
+          SECURITY_SCORE=4
+          MAINTAINABILITY_SCORE=4
+          PERFORMANCE_SCORE=3
 
           TOTAL_SCORE=$((SECURITY_SCORE + MAINTAINABILITY_SCORE + PERFORMANCE_SCORE))
 
