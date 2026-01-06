@@ -1,0 +1,44 @@
+name: PR Comment Bot - AI Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  pr-comment:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: final-summary
+          path: ./reports
+        continue-on-error: true
+
+      - name: Read final summary
+        id: summary
+        run: |
+          if [ -f "./reports/final_summary.md" ]; then
+            echo "summary<<EOF" >> $GITHUB_OUTPUT
+            cat ./reports/final_summary.md >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            echo "summary=⚠️ No final summary found." >> $GITHUB_OUTPUT
+          fi
+
+      - name: Post comment on PR
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          body: |
+            ## 🤖 AI Code Review Result
+
+            ${{ steps.summary.outputs.summary }}
+
+            ---
+            🔍 *Automated review by CI pipeline*
+          token: ${{ secrets.GITHUB_TOKEN }}
