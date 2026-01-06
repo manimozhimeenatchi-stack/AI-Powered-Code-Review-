@@ -1,0 +1,27 @@
+name: Policy Enforcement
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  policy-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Read policy file
+        id: policy
+        run: |
+          MAX_AI_SCORE=$(yq '.rules.ai_risk.max_score' security_policy.yaml)
+          echo "max_ai_score=$MAX_AI_SCORE" >> $GITHUB_OUTPUT
+
+      - name: Enforce AI Policy
+        run: |
+          AI_SCORE=15  # Replace with actual score
+          if [ "$AI_SCORE" -gt "${{ steps.policy.outputs.max_ai_score }}" ]; then
+            echo "❌ Policy violation: AI risk too high"
+            exit 1
+          fi
