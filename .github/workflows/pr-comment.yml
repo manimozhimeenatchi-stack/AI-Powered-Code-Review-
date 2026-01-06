@@ -2,23 +2,35 @@ name: PR Comment Bot - AI Code Review
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+# 🔐 REQUIRED PERMISSIONS (this fixes the 403 error)
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
 
 jobs:
   pr-comment:
     runs-on: ubuntu-latest
 
     steps:
+      # 1️⃣ Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Download artifacts
+      # 2️⃣ Download final summary artifact (if it exists)
+      - name: Download final summary artifact
         uses: actions/download-artifact@v4
         with:
           name: final-summary
           path: ./reports
         continue-on-error: true
 
+      # 3️⃣ Read summary content safely
       - name: Read final summary
         id: summary
         run: |
@@ -30,6 +42,7 @@ jobs:
             echo "summary=⚠️ No final summary found." >> $GITHUB_OUTPUT
           fi
 
+      # 4️⃣ Create or update PR comment
       - name: Post comment on PR
         uses: peter-evans/create-or-update-comment@v4
         with:
